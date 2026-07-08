@@ -28,7 +28,12 @@ export async function loadPhotoMetadata(): Promise<StoredPhotoMetadata | null> {
 
   try {
     const parsed: unknown = JSON.parse(result.value)
-    return isStoredPhotoMetadata(parsed) ? parsed : null
+    if (isStoredPhotoMetadata(parsed)) {
+      return parsed
+    }
+
+    await clearPhotoMetadata()
+    return null
   } catch {
     await clearPhotoMetadata()
     return null
@@ -50,6 +55,7 @@ function isStoredPhotoMetadata(value: unknown): value is StoredPhotoMetadata {
     typeof metadata.photoUri === 'string' &&
     typeof metadata.webPath === 'string' &&
     typeof metadata.createdAt === 'string' &&
+    !Number.isNaN(Date.parse(metadata.createdAt)) &&
     isKnownPlatform(metadata.platform)
   )
 }

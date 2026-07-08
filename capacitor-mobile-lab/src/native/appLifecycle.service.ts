@@ -19,28 +19,34 @@ export function watchAppActivity(
   onChange: (state: AppActivityState) => void,
   onError: (message: string) => void,
 ): LifecycleSubscription {
-  let listener: PluginListenerHandle | null = null
-  let shouldRemoveAfterSetup = false
+  let isRemoved = false
 
-  void App.addListener('appStateChange', (state) => {
-    onChange(toActivityState(state.isActive))
+  const listenerPromise = App.addListener('appStateChange', (state) => {
+    if (!isRemoved) {
+      onChange(toActivityState(state.isActive))
+    }
   })
-    .then((handle) => {
-      if (shouldRemoveAfterSetup) {
-        void handle.remove()
-        return
+    .then(async (handle) => {
+      if (isRemoved) {
+        await removeListener(handle)
+        return null
       }
 
-      listener = handle
+      return handle
     })
     .catch((error: unknown) => {
-      onError(getLifecycleErrorMessage(error))
+      if (!isRemoved) {
+        onError(getLifecycleErrorMessage(error))
+      }
+
+      return null
     })
 
   return {
     async remove() {
-      shouldRemoveAfterSetup = true
-      await listener?.remove()
+      isRemoved = true
+      const listener = await listenerPromise
+      await removeListener(listener)
     },
   }
 }
@@ -56,4 +62,10 @@ function getLifecycleErrorMessage(error: unknown): string {
   return error instanceof Error
     ? error.message
     : 'Unable to subscribe to app lifecycle events.'
+}
+
+async function removeListener(
+  listener: PluginListenerHandle | null,
+): Promise<void> {
+  await listener?.remove()
 }

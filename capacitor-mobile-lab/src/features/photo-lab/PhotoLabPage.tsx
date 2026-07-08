@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from 'react'
 import { Button } from '../../components/Button'
 import { Card } from '../../components/Card'
 import { usePhotoLab } from './usePhotoLab'
@@ -14,6 +15,25 @@ export function PhotoLabPage() {
     previewPath,
     selectPhoto,
   } = usePhotoLab()
+  const createdAtLabel = useMemo(() => {
+    if (!photoMetadata) {
+      return 'Nothing saved yet'
+    }
+
+    return new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(photoMetadata.createdAt))
+  }, [photoMetadata])
+  const handleTakePhoto = useCallback(() => {
+    void selectPhoto('camera')
+  }, [selectPhoto])
+  const handleSelectPhoto = useCallback(() => {
+    void selectPhoto('gallery')
+  }, [selectPhoto])
+  const handleClearSavedData = useCallback(() => {
+    void clearSavedData()
+  }, [clearSavedData])
 
   return (
     <main className="app-shell">
@@ -83,19 +103,19 @@ export function PhotoLabPage() {
 
       <Card title="Camera and local persistence">
         <div className="action-row">
-          <Button disabled={isBusy} onClick={() => void selectPhoto('camera')}>
+          <Button disabled={isBusy} onClick={handleTakePhoto}>
             Take photo
           </Button>
           <Button
             disabled={isBusy}
-            onClick={() => void selectPhoto('gallery')}
+            onClick={handleSelectPhoto}
             variant="secondary"
           >
             Select photo
           </Button>
           <Button
             disabled={isBusy || !photoMetadata}
-            onClick={() => void clearSavedData()}
+            onClick={handleClearSavedData}
             variant="danger"
           >
             Clear saved data
@@ -120,14 +140,7 @@ export function PhotoLabPage() {
             </div>
             <div>
               <dt>Created</dt>
-              <dd>
-                {photoMetadata
-                  ? new Intl.DateTimeFormat(undefined, {
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
-                    }).format(new Date(photoMetadata.createdAt))
-                  : 'Nothing saved yet'}
-              </dd>
+              <dd>{createdAtLabel}</dd>
             </div>
             <div>
               <dt>Saved platform</dt>

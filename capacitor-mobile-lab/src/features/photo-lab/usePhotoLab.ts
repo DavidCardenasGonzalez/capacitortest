@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { SetStateAction } from 'react'
 import {
   capturePhoto,
   getCameraErrorMessage,
@@ -18,7 +19,8 @@ import { getPlatform } from '../../native/platform.service'
 import type { PhotoLabState } from './photoLab.types'
 
 export function usePhotoLab() {
-  const platform = useMemo(() => getPlatform(), [])
+  const [platform] = useState(getPlatform)
+  const isMountedRef = useRef(false)
   const [state, setState] = useState<PhotoLabState>({
     appActivity: null,
     deviceInfo: null,
@@ -29,9 +31,21 @@ export function usePhotoLab() {
     previewPath: null,
   })
 
-  useEffect(() => {
-    let isMounted = true
+  const updateState = useCallback((update: SetStateAction<PhotoLabState>) => {
+    if (isMountedRef.current) {
+      setState(update)
+    }
+  }, [])
 
+  useEffect(() => {
+    isMountedRef.current = true
+
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  useEffect(() => {
     async function loadInitialState() {
       try {
         const [deviceInfo, appActivity, photoMetadata] = await Promise.all([
@@ -40,11 +54,7 @@ export function usePhotoLab() {
           loadPhotoMetadata(),
         ])
 
-        if (!isMounted) {
-          return
-        }
-
-        setState((current) => ({
+        updateState((current) => ({
           ...current,
           appActivity,
           deviceInfo,
@@ -53,11 +63,7 @@ export function usePhotoLab() {
           previewPath: photoMetadata?.webPath ?? null,
         }))
       } catch (error) {
-        if (!isMounted) {
-          return
-        }
-
-        setState((current) => ({
+        updateState((current) => ({
           ...current,
           errorMessage: getErrorMessage(error),
           isBusy: false,
@@ -69,22 +75,21 @@ export function usePhotoLab() {
 
     const subscription = watchAppActivity(
       (appActivity) => {
-        setState((current) => ({ ...current, appActivity }))
+        updateState((current) => ({ ...current, appActivity }))
       },
       (message) => {
-        setState((current) => ({ ...current, errorMessage: message }))
+        updateState((current) => ({ ...current, errorMessage: message }))
       },
     )
 
     return () => {
-      isMounted = false
       void subscription.remove()
     }
-  }, [])
+  }, [updateState])
 
   const selectPhoto = useCallback(
     async (source: PhotoSource) => {
-      setState((current) => ({
+      updateState((current) => ({
         ...current,
         errorMessage: null,
         isBusy: true,
@@ -101,25 +106,25 @@ export function usePhotoLab() {
 
         await savePhotoMetadata(metadata)
 
-        setState((current) => ({
+        updateState((current) => ({
           ...current,
           isBusy: false,
           photoMetadata: metadata,
           previewPath: photo.webPath,
         }))
       } catch (error) {
-        setState((current) => ({
+        updateState((current) => ({
           ...current,
           errorMessage: getCameraErrorMessage(error),
           isBusy: false,
         }))
       }
     },
-    [platform],
+    [platform, updateState],
   )
 
   const clearSavedData = useCallback(async () => {
-    setState((current) => ({
+    updateState((current) => ({
       ...current,
       errorMessage: null,
       isBusy: true,
@@ -128,20 +133,20 @@ export function usePhotoLab() {
     try {
       await clearPhotoMetadata()
 
-      setState((current) => ({
+      updateState((current) => ({
         ...current,
         isBusy: false,
         photoMetadata: null,
         previewPath: null,
       }))
     } catch (error) {
-      setState((current) => ({
+      updateState((current) => ({
         ...current,
         errorMessage: getErrorMessage(error),
         isBusy: false,
       }))
     }
-  }, [])
+  }, [updateState])
 
   return {
     ...state,
